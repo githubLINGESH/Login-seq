@@ -1,0 +1,88 @@
+/* Base Styles */
+body {
+    margin: 0;
+    font-family: 'Roboto', sans-serif;
+    background: linear-gradient(to top, #000000, #434343);
+    color: white;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+  }
+   
+  .login-container {
+    width: 100%;
+    max-width: 400px;
+  }
+   
+  .login-box {
+    background-color: rgba(0, 0, 0, 0.85);
+    padding: 40px 30px;
+    border-radius: 10px;
+    box-shadow: 0 0 25px rgba(0,0,0,0.9);
+    text-align: center;
+  }
+   
+  .login-box h2 {
+    margin-bottom: 20px;
+    color: #e50914;
+    font-size: 28px;
+  }
+   
+  input[type="email"],
+  input[type="password"] {
+    width: 100%;
+    padding: 12px;
+    margin: 10px 0;
+    border: none;
+    border-radius: 5px;
+    background-color: #333;
+    color: white;
+    font-size: 14px;
+  }
+   
+  input::placeholder {
+    color: #999;
+  }
+   
+  button {
+    width: 100%;
+    padding: 12px;
+    background-color: #e50914;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+   
+  button:hover {
+    background-color: #f6121d;
+  }
+   
+  #message {
+    margin-top: 15px;
+    font-size: 14px;
+    color: #ff4c4c;
+  }
+   
+  /* Responsive Adjustments */
+  @media (max-width: 600px) {
+    .login-box {
+      padding: 30px 20px;
+    }
+   
+    .login-box h2 {
+      font-size: 24px;
+    }
+   
+    input[type="email"],
+    input[type="password"],
+    button {
+      font-size: 13px;
+      padding: 10px;
+    }
+  }
+   
