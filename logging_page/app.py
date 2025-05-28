@@ -9,8 +9,7 @@ import os
 from db import db_session, init_db, User, LoginAttempt, BlacklistedIP, Notification
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'a_very_secret_key_for_dev')
-
+app.config['SECRET_KEY'] = "ueigqf7p91etef91p"
 # Initialize the database when the app starts
 with app.app_context():
     init_db()
