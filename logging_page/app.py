@@ -1,46 +1,62 @@
 # app.py
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for, flash
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 import uuid
 import os
+from functools import wraps
 
 # Import database models and session from db.py
 from db import db_session, init_db, User, LoginAttempt, BlacklistedIP, Notification
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = "ueigqf7p91etef91p"
+# Set a secret key for session management. IMPORTANT: Use a strong, random key in production.
+app.config['SECRET_KEY'] = 'ueigqf7p91etef91p_default_secret'
+
 # Initialize the database when the app starts
 with app.app_context():
     init_db()
-    # Add a default admin user if not exists for testing
-    if not db_session.query(User).filter_by(email='admin@yourdomain.com').first():
-        admin_user = User(
-            user_id=str(uuid.uuid4()),
-            email='admin@yourdomain.com',
-            password_hash=generate_password_hash('admin_secure_password'), # Use a strong password
-            is_admin=True
-        )
-        db_session.add(admin_user)
-        db_session.commit()
-        print("Default admin user created.")
+    # Removed the default user creation here, as populate_db.py handles it.
+    # You can keep this block if you want a fallback for first run without populate_db.py
+    # but it's generally better to separate data seeding from app startup.
+    # For now, we assume populate_db.py has already run.
+    print("Database tables ensured. Assuming initial users are populated by populate_db.py.")
 
-    # Add a default regular user if not exists for testing
-    if not db_session.query(User).filter_by(email='user1@example.com').first():
-        regular_user = User(
-            user_id=str(uuid.uuid4()),
-            email='user1@example.com',
-            password_hash=generate_password_hash('user_secure_password'), # Use a strong password
-            is_admin=False
-        )
-        db_session.add(regular_user)
-        db_session.commit()
-        print("Default regular user created.")
 
+# --- Authentication and Authorization Decorators ---
+
+def login_required(f):
+    """Decorator to ensure a user is logged in."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            flash('Please log in to access this page.', 'warning')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def admin_required(f):
+    """Decorator to ensure the logged-in user is an admin."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session or not session.get('is_admin'):
+            flash('You do not have permission to access this page.', 'danger')
+            return redirect(url_for('index')) # Or redirect to a regular dashboard
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+# --- Routes ---
 
 @app.route('/')
 def index():
     """Renders the main login page."""
+    # If user is already logged in, redirect to dashboard
+    if 'user_id' in session:
+        if session.get('is_admin'):
+            return redirect(url_for('admin_dashboard'))
+        else:
+            return redirect(url_for('user_dashboard'))
     return render_template('index.html')
 
 @app.route('/login', methods=['POST'])
@@ -55,27 +71,22 @@ def login():
         return jsonify({'message': 'Email and password are required'}), 400
 
     # --- Brute-Force Detection Logic ---
-    # Define the time window and threshold for brute-force detection
     TIME_WINDOW_SECONDS = 2
     FAILED_ATTEMPT_THRESHOLD = 5
 
-    # Calculate the time from which to check for recent attempts
     time_threshold = datetime.now() - timedelta(seconds=TIME_WINDOW_SECONDS)
 
-    # Count failed attempts from this IP within the time window
     recent_failed_attempts = db_session.query(LoginAttempt).filter(
         LoginAttempt.ip_address == ip_address,
         LoginAttempt.attempt_time >= time_threshold,
         LoginAttempt.is_successful == False
     ).count()
 
-    # Check if the IP is already blacklisted
     is_blacklisted = db_session.query(BlacklistedIP).filter_by(
         ip_address=ip_address, is_active=True
     ).first()
 
     if is_blacklisted:
-        # Log the attempt even if blacklisted
         new_attempt = LoginAttempt(
             email=gmail,
             ip_address=ip_address,
@@ -87,9 +98,8 @@ def login():
         print(f"Blocked login attempt from blacklisted IP: {ip_address}")
         return jsonify({'message': 'Your IP address has been temporarily blocked due to suspicious activity.'}), 403
 
-    # If recent failed attempts exceed the threshold, blacklist the IP
     if recent_failed_attempts >= FAILED_ATTEMPT_THRESHOLD:
-        if not is_blacklisted: # Only add if not already blacklisted
+        if not is_blacklisted:
             new_blacklist_entry = BlacklistedIP(
                 ip_address=ip_address,
                 reason=f'Exceeded {FAILED_ATTEMPT_THRESHOLD} failed login attempts within {TIME_WINDOW_SECONDS} seconds.'
@@ -97,7 +107,6 @@ def login():
             db_session.add(new_blacklist_entry)
             db_session.commit()
 
-            # Send notification to admin
             admin_notification = Notification(
                 admin_email='admin@yourdomain.com', # Assuming this is the admin email
                 notification_type='Brute Force Alert',
@@ -108,7 +117,6 @@ def login():
             db_session.commit()
             print(f"ADMIN ALERT: IP {ip_address} blacklisted due to brute force.")
         
-        # Log the current attempt as failed and blocked
         new_attempt = LoginAttempt(
             email=gmail,
             ip_address=ip_address,
@@ -133,7 +141,16 @@ def login():
         )
         db_session.add(new_attempt)
         db_session.commit()
-        return jsonify({'message': 'Login successful!', 'redirect': '/dashboard'}) # In a real app, redirect to dashboard
+
+        # Set session variables for logged-in user
+        session['user_id'] = user.user_id
+        session['email'] = user.email
+        session['is_admin'] = user.is_admin
+
+        if user.is_admin:
+            return jsonify({'message': 'Login successful!', 'redirect': url_for('admin_dashboard')})
+        else:
+            return jsonify({'message': 'Login successful!', 'redirect': url_for('user_dashboard')})
     else:
         # Failed login (incorrect password or user not found)
         reason = 'Incorrect Password' if user else 'User Not Found'
@@ -147,18 +164,15 @@ def login():
         db_session.add(new_attempt)
         db_session.commit()
 
-        # Check if this is an attempt with an unknown email
         if not user:
-            # Check if there are multiple attempts for unknown users from this IP
             unknown_user_attempts = db_session.query(LoginAttempt).filter(
                 LoginAttempt.ip_address == ip_address,
                 LoginAttempt.is_successful == False,
-                LoginAttempt.user_id == None, # Attempts for non-existent users
-                LoginAttempt.attempt_time >= time_threshold # Within the same window
+                LoginAttempt.user_id == None,
+                LoginAttempt.attempt_time >= time_threshold
             ).count()
 
-            # If multiple unknown user attempts, consider it suspicious
-            if unknown_user_attempts >= FAILED_ATTEMPT_THRESHOLD / 2: # A lower threshold for unknown users
+            if unknown_user_attempts >= FAILED_ATTEMPT_THRESHOLD / 2:
                 admin_notification = Notification(
                     admin_email='admin@yourdomain.com',
                     notification_type='Suspicious Unknown User Attempts',
@@ -169,8 +183,49 @@ def login():
                 db_session.commit()
                 print(f"ADMIN ALERT: Suspicious unknown user attempts from IP {ip_address}.")
 
-
         return jsonify({'message': 'Invalid email or password.'}), 401
+
+@app.route('/dashboard')
+@login_required
+def user_dashboard():
+    """Simple dashboard for regular users."""
+    return render_template('dashboard.html', email=session.get('email'))
+
+@app.route('/admin/dashboard')
+@admin_required
+def admin_dashboard():
+    """Admin dashboard showing security logs."""
+    # Fetch all data for display
+    all_login_attempts = db_session.query(LoginAttempt).order_by(LoginAttempt.attempt_time.desc()).all()
+    all_blacklisted_ips = db_session.query(BlacklistedIP).order_by(BlacklistedIP.blacklisted_at.desc()).all()
+    all_notifications = db_session.query(Notification).order_by(Notification.sent_at.desc()).all()
+
+    # Get counts for the admin dashboard
+    total_users = db_session.query(User).count()
+    total_blacklisted = db_session.query(BlacklistedIP).filter_by(is_active=True).count()
+    total_failed_logins_today = db_session.query(LoginAttempt).filter(
+        LoginAttempt.is_successful == False,
+        LoginAttempt.attempt_time >= datetime.now() - timedelta(days=1)
+    ).count()
+
+    return render_template(
+        'admin_dashboard.html',
+        email=session.get('email'),
+        login_attempts=all_login_attempts,
+        blacklisted_ips=all_blacklisted_ips,
+        notifications=all_notifications,
+        total_users=total_users,
+        total_blacklisted=total_blacklisted,
+        total_failed_logins_today=total_failed_logins_today
+    )
+
+@app.route('/logout')
+@login_required
+def logout():
+    """Logs the user out by clearing the session."""
+    session.clear()
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('index'))
 
 # Add a tear down context to remove the session
 @app.teardown_appcontext
