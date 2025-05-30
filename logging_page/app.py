@@ -70,7 +70,30 @@ def login():
     if not gmail or not password:
         return jsonify({'message': 'Email and password are required'}), 400
 
-    # --- Brute-Force Detection Logic ---
+    # --- Authenticate User First ---
+    user = db_session.query(User).filter_by(email=gmail).first()
+
+    # Bypass brute-force checks if the user is an admin and credentials are correct
+    if user and user.is_admin and (user.password_hash == password): # Assuming plain text for now
+    # if user and user.is_admin and check_password_hash(user.password_hash, password): # Use this if using hashed passwords
+        # Successful login for admin
+        new_attempt = LoginAttempt(
+            email=gmail,
+            ip_address=ip_address,
+            is_successful=True,
+            user_id=user.user_id,
+            reason='Successful Admin Login (Bypassed Brute Force Check)'
+        )
+        db_session.add(new_attempt)
+        db_session.commit()
+
+        session['user_id'] = user.user_id
+        session['email'] = user.email
+        session['is_admin'] = user.is_admin
+        return jsonify({'message': 'Login successful!', 'redirect': url_for('admin_dashboard')})
+
+
+    # --- Brute-Force Detection Logic (only for non-admin attempts or failed admin attempts) ---
     TIME_WINDOW_SECONDS = 30
     FAILED_ATTEMPT_THRESHOLD = 5
 
@@ -86,7 +109,6 @@ def login():
         ip_address=ip_address, is_active=True
     ).first()
 
-    if 
 
     if is_blacklisted:
         new_attempt = LoginAttempt(
@@ -129,13 +151,9 @@ def login():
         db_session.commit()
         return jsonify({'message': 'Too many failed login attempts. Your IP has been blocked.'}), 403
 
-    # --- Authenticate User ---
-    user = db_session.query(User).filter_by(email=gmail).first()
-    
-    print(user.password_hash,password)
+    # --- Authenticate User (Non-Admin or Admin with incorrect credentials) ---
     # if user and check_password_hash(user.password_hash, password):
-    if user and (user.password_hash == password):
-        print(user.password_hash, password)
+    if user and (user.password_hash == password): # Keeping your plain text password check here for consistency
         # Successful login
         new_attempt = LoginAttempt(
             email=gmail,
