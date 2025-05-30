@@ -86,6 +86,8 @@ def login():
         ip_address=ip_address, is_active=True
     ).first()
 
+    if 
+
     if is_blacklisted:
         new_attempt = LoginAttempt(
             email=gmail,

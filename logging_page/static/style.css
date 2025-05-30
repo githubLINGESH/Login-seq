@@ -6,11 +6,12 @@ body {
     color: white;
     min-height: 100vh;
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
     padding: 20px;
   }
-   
+  
   .login-container {
     width: 100%;
     max-width: 400px;
@@ -28,6 +29,11 @@ body {
     margin-bottom: 20px;
     color: #e50914;
     font-size: 28px;
+  }
+  .head{
+    font-family: "Monospace";
+    margin:20px;
+    color: #999B9B
   }
    
   input[type="email"],
