@@ -13,12 +13,12 @@ def add_initial_users():
     print("--- Adding Initial Users ---")
 
     # Admin User
-    admin_email = "admin@yourdomain.com"
+    admin_email = "admin@gmail.com"
     if not db_session.query(User).filter_by(email=admin_email).first():
         admin_user = User(
             user_id=str(uuid.uuid4()),
             email=admin_email,
-            password_hash=generate_password_hash("admin_secure_password_123"), # IMPORTANT: Use a strong password
+            password_hash="admin@123", # IMPORTANT: Use a strong password
             is_admin=True
         )
         db_session.add(admin_user)
@@ -27,12 +27,12 @@ def add_initial_users():
         print(f"Admin user '{admin_email}' already exists. Skipping.")
 
     # Regular User 1 (existing from previous version)
-    user1_email = "user1@example.com"
+    user1_email = "user1@yahoo.com"
     if not db_session.query(User).filter_by(email=user1_email).first():
         user1 = User(
             user_id=str(uuid.uuid4()),
             email=user1_email,
-            password_hash=generate_password_hash("user_password_123"),
+            password_hash="user@123",
             is_admin=False
         )
         db_session.add(user1)

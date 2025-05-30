@@ -71,7 +71,7 @@ def login():
         return jsonify({'message': 'Email and password are required'}), 400
 
     # --- Brute-Force Detection Logic ---
-    TIME_WINDOW_SECONDS = 2
+    TIME_WINDOW_SECONDS = 30
     FAILED_ATTEMPT_THRESHOLD = 5
 
     time_threshold = datetime.now() - timedelta(seconds=TIME_WINDOW_SECONDS)
@@ -130,7 +130,10 @@ def login():
     # --- Authenticate User ---
     user = db_session.query(User).filter_by(email=gmail).first()
     
-    if user and check_password_hash(user.password_hash, password):
+    print(user.password_hash,password)
+    # if user and check_password_hash(user.password_hash, password):
+    if user and (user.password_hash == password):
+        print(user.password_hash, password)
         # Successful login
         new_attempt = LoginAttempt(
             email=gmail,
